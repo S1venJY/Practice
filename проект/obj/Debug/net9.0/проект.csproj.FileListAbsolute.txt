@@ -1,0 +1,14 @@
+D:\Users\S1venJY\Desktop\практика програмування\проект\bin\Debug\net9.0\проект.exe
+D:\Users\S1venJY\Desktop\практика програмування\проект\bin\Debug\net9.0\проект.deps.json
+D:\Users\S1venJY\Desktop\практика програмування\проект\bin\Debug\net9.0\проект.runtimeconfig.json
+D:\Users\S1venJY\Desktop\практика програмування\проект\bin\Debug\net9.0\проект.dll
+D:\Users\S1venJY\Desktop\практика програмування\проект\bin\Debug\net9.0\проект.pdb
+D:\Users\S1venJY\Desktop\практика програмування\проект\obj\Debug\net9.0\проект.GeneratedMSBuildEditorConfig.editorconfig
+D:\Users\S1venJY\Desktop\практика програмування\проект\obj\Debug\net9.0\проект.AssemblyInfoInputs.cache
+D:\Users\S1venJY\Desktop\практика програмування\проект\obj\Debug\net9.0\проект.AssemblyInfo.cs
+D:\Users\S1venJY\Desktop\практика програмування\проект\obj\Debug\net9.0\проект.csproj.CoreCompileInputs.cache
+D:\Users\S1venJY\Desktop\практика програмування\проект\obj\Debug\net9.0\проект.dll
+D:\Users\S1venJY\Desktop\практика програмування\проект\obj\Debug\net9.0\refint\проект.dll
+D:\Users\S1venJY\Desktop\практика програмування\проект\obj\Debug\net9.0\проект.pdb
+D:\Users\S1venJY\Desktop\практика програмування\проект\obj\Debug\net9.0\проект.genruntimeconfig.cache
+D:\Users\S1venJY\Desktop\практика програмування\проект\obj\Debug\net9.0\ref\проект.dll
