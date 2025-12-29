@@ -1,6 +1,9 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.IO;
+using System.Text;
+using System.Text.Json;
 
 public static class Program
 {
@@ -58,13 +61,73 @@ public static class Program
         }
     }
 
+    // ---- Моделі для збереження (JSON) ----
+    sealed class SaveData
+    {
+        public int Version { get; set; } = 1;
+        public string CurrentRoomId { get; set; } = "home";
+        public PlayerData Player { get; set; } = new();
+        public List<string> Inventory { get; set; } = new();
+        public Dictionary<string, RoomData> Rooms { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    }
+
+    sealed class PlayerData
+    {
+        public string Name { get; set; } = "Гравець";
+        public string Class { get; set; } = "Мандрівник";
+        public int Hp { get; set; } = 20;
+        public int MaxHp { get; set; } = 20;
+        public int Power { get; set; } = 5;
+    }
+
+    sealed class RoomData
+    {
+        public List<string> Items { get; set; } = new();
+        public List<NpcData> Npcs { get; set; } = new();
+    }
+
+    sealed class NpcData
+    {
+        public string Name { get; set; } = "";
+        public int Hp { get; set; }
+        public bool Hostile { get; set; }
+    }
+
     sealed class Game
     {
+    // public void RunUnitTests()
+    // {
+    //     Console.WriteLine("=== ЗАПУСК UNIT TESTING (Внутрішні тести) ===");
+
+    //     // Тест 1: Перевірка ініціалізації гравця
+    //     var testPlayer = new Player { Name = "Tester", Class = "воїн" };
+    //     testPlayer.MaxHp = 30; testPlayer.Hp = 30;
+    //     bool playerOk = (testPlayer.Hp == 30 && testPlayer.Name == "Tester");
+    //     Console.WriteLine($"[Test] Player Initialization: {(playerOk ? "PASSED" : "FAILED")}");
+
+    //     // Тест 2: Перевірка логіки діалогів NPC
+    //     var testNpc = new Npc("Марко", "Продавець", 15);
+    //     string speech = testNpc.Talk();
+    //     bool npcOk = speech.Contains("Дивись товари");
+    //     Console.WriteLine($"[Test] NPC Dialogue Logic: {(npcOk ? "PASSED" : "FAILED")}");
+
+    //     // Тест 3: Перевірка системи кімнат (виходи)
+    //     var testRoom = new Room("Тест", "Опис");
+    //     testRoom.Exits["north"] = "street";
+    //     bool roomOk = testRoom.Exits.ContainsKey("north") && testRoom.Exits["north"] == "street";
+    //     Console.WriteLine($"[Test] Room Navigation Logic: {(roomOk ? "PASSED" : "FAILED")}");
+
+    //     Console.WriteLine("=== UNIT TESTING ЗАВЕРШЕНО ===");
+    // }
         private readonly Dictionary<string, Room> rooms = new(StringComparer.OrdinalIgnoreCase);
         private readonly List<string> inventory = new();
         private readonly Player player = new();
         private string currentRoomId = "home";
         private readonly Random rng = new();
+
+        // Файл збереження біля exe
+        private static readonly string SavePath =
+            Path.Combine(AppContext.BaseDirectory, "save.json");
 
         public Game()
         {
@@ -73,6 +136,8 @@ public static class Program
 
         private void BuildWorld()
         {
+            rooms.Clear();
+
             var home = new Room("Дім", "Ти вдома, нічого так заспокоює як бути у своєму домі.");
             home.Items.Add("ключ");
             home.Exits["north"] = "street";
@@ -110,8 +175,14 @@ public static class Program
 
         public void Run()
         {
-            Console.OutputEncoding = System.Text.Encoding.UTF8;
+            Console.OutputEncoding = Encoding.UTF8;
+
             PrintWelcome();
+
+            // Якщо є збереження — підкажемо
+            if (File.Exists(SavePath))
+                Console.WriteLine($"Знайдено save.json. Можеш написати: load");
+
             CreateCharacter();
             Look();
 
@@ -137,7 +208,7 @@ public static class Program
 
         private void PrintWelcome()
         {
-            Console.WriteLine("Команди: look, go <dir>, take <item>, drop <item>, inv, stats, talk <npc>, give <item> <npc>, attack <npc>, help, exit");
+            Console.WriteLine("Команди: look, go <dir>, take <item>, drop <item>, inv, stats, talk <npc>, give <item> <npc>, attack <npc>, save, load, help, exit");
         }
 
         private void CreateCharacter()
@@ -259,6 +330,15 @@ public static class Program
                         Attack(arg);
                     return true;
 
+                // ---- збереження/завантаження ----
+                case "save":
+                    SaveGame();
+                    return true;
+
+                case "load":
+                    LoadGame();
+                    return true;
+
                 case "exit":
                 case "quit":
                     Console.WriteLine("Вихід з гри.");
@@ -283,6 +363,8 @@ public static class Program
             Console.WriteLine("  talk <npc>                    — поговорити з NPC");
             Console.WriteLine("  give <item> <npc>             — дати предмет NPC");
             Console.WriteLine("  attack <npc>                  — атакувати NPC");
+            Console.WriteLine("  save                          — зберегти гру (save.json)");
+            Console.WriteLine("  load                          — завантажити гру (save.json)");
             Console.WriteLine("  help / ?                      — довідка");
             Console.WriteLine("  exit                          — вихід");
         }
@@ -304,9 +386,7 @@ public static class Program
 
             var aliveNpcs = room.Npcs.Where(n => n.Hp > 0).ToList();
             if (aliveNpcs.Count > 0)
-            {
                 Console.WriteLine("Персонажі: " + string.Join(", ", aliveNpcs.Select(n => $"{n.Name} ({n.Role})")));
-            }
         }
 
         private void Go(string dir)
@@ -470,6 +550,121 @@ public static class Program
             Console.WriteLine($"{npc.Name} відповів атакою на {retaliate}. Твоє HP: {player.Hp}/{player.MaxHp}");
         }
 
+        // ---- ЗБЕРЕЖЕННЯ / ЗАВАНТАЖЕННЯ ----
+        private void SaveGame()
+        {
+            try
+            {
+                var save = new SaveData
+                {
+                    CurrentRoomId = currentRoomId,
+                    Player = new PlayerData
+                    {
+                        Name = player.Name,
+                        Class = player.Class,
+                        Hp = player.Hp,
+                        MaxHp = player.MaxHp,
+                        Power = player.Power
+                    },
+                    Inventory = inventory.ToList()
+                };
+
+                foreach (var kv in rooms)
+                {
+                    var roomId = kv.Key;
+                    var room = kv.Value;
+
+                    var rd = new RoomData
+                    {
+                        Items = room.Items.ToList(),
+                        Npcs = room.Npcs.Select(n => new NpcData
+                        {
+                            Name = n.Name,
+                            Hp = n.Hp,
+                            Hostile = n.Hostile
+                        }).ToList()
+                    };
+
+                    save.Rooms[roomId] = rd;
+                }
+
+                var options = new JsonSerializerOptions { WriteIndented = true };
+                var json = JsonSerializer.Serialize(save, options);
+                File.WriteAllText(SavePath, json, Encoding.UTF8);
+
+                Console.WriteLine($"Збережено: {SavePath}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Помилка збереження: {ex.Message}");
+            }
+        }
+
+        private void LoadGame()
+        {
+            try
+            {
+                if (!File.Exists(SavePath))
+                {
+                    Console.WriteLine("Немає файлу збереження (save.json).");
+                    return;
+                }
+
+                var json = File.ReadAllText(SavePath, Encoding.UTF8);
+                var save = JsonSerializer.Deserialize<SaveData>(json);
+
+                if (save == null)
+                {
+                    Console.WriteLine("Не вдалося прочитати save.json.");
+                    return;
+                }
+
+                BuildWorld();
+
+                player.Name = save.Player.Name;
+                player.Class = save.Player.Class;
+                player.Hp = save.Player.Hp;
+                player.MaxHp = save.Player.MaxHp;
+                player.Power = save.Player.Power;
+
+                inventory.Clear();
+                inventory.AddRange(save.Inventory ?? new List<string>());
+
+                if (save.Rooms != null)
+                {
+                    foreach (var kv in save.Rooms)
+                    {
+                        if (!rooms.TryGetValue(kv.Key, out var room)) continue;
+
+                        room.Items.Clear();
+                        room.Items.AddRange(kv.Value.Items ?? new List<string>());
+
+                        foreach (var npcState in kv.Value.Npcs ?? new List<NpcData>())
+                        {
+                            var npc = room.Npcs.FirstOrDefault(n => n.Name.Equals(npcState.Name, StringComparison.OrdinalIgnoreCase));
+                            if (npc != null)
+                            {
+                                npc.Hp = npcState.Hp;
+                                npc.Hostile = npcState.Hostile;
+                            }
+                        }
+                    }
+                }
+
+                if (!string.IsNullOrWhiteSpace(save.CurrentRoomId) && rooms.ContainsKey(save.CurrentRoomId))
+                    currentRoomId = save.CurrentRoomId;
+                else
+                    currentRoomId = "home";
+
+                Console.WriteLine("Завантаження успішне.");
+                Look();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Помилка завантаження: {ex.Message}");
+            }
+        }
+
         private static List<string> SplitArgs(string input)
         {
             var result = new List<string>();
@@ -510,5 +705,12 @@ public static class Program
     public static void Main()
     {
         new Game().Run();
+        //     Console.OutputEncoding = System.Text.Encoding.UTF8;
+    
+        //     var game = new Game();
+        //     game.RunUnitTests();
+
+        //     Console.WriteLine("\nТестування завершено. Натисніть будь-яку клавішу, щоб вийти...");
+        //     Console.ReadKey();
     }
 }
